@@ -612,6 +612,22 @@
   .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.45); border-radius: 3px; }
   .chat-list::-webkit-scrollbar-thumb { background: #D5D5D5; border-radius: 3px; }
 
+  /* ---------- Admin delete button ---------- */
+  .del-chat-btn {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 6px;
+    opacity: 0;
+    transition: opacity .15s, background .15s;
+    line-height: 1;
+  }
+
+  .chat-item:hover .del-chat-btn { opacity: 1; }
+  .del-chat-btn:hover { background: #FFE5E5; }
+
   /* ---------- Mobile ---------- */
   @media (max-width: 768px) {
     .app { max-width: none; box-shadow: none; }
@@ -699,6 +715,19 @@
 <div id="imgModal" class="modal-overlay img-modal" style="display:none">
   <img id="imgModalSrc" src="" alt="preview">
   <button id="imgModalClose" class="img-modal-close">✕</button>
+</div>
+
+<!-- ===== Confirm Delete Modal ===== -->
+<div id="confirmModal" class="modal-overlay" style="display:none">
+  <div class="modal-box" style="max-width:300px;text-align:center">
+    <div style="font-size:36px;margin-bottom:12px">🗑️</div>
+    <h2 class="modal-title" id="confirmTitle">ยืนยันการลบ?</h2>
+    <p class="modal-subtitle" id="confirmMsg">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+    <div class="modal-actions" style="justify-content:center;gap:12px">
+      <button id="confirmCancel" class="btn-outline">ยกเลิก</button>
+      <button id="confirmOk" class="btn-green" style="background:#e53935">ลบ</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== Toast ===== -->
@@ -849,6 +878,96 @@ const esc = s => String(s).replace(/[&<>"']/g,
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
+/* =========================================================
+   Persistence & Cross-tab Sync
+   ========================================================= */
+const STORAGE_KEY = 'peechat_extra_chats';
+const DEFAULT_IDS = new Set(['c1','c2','c3','c4','c5']);
+let bc = null;
+
+function loadPersistedChats() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const extra = JSON.parse(raw);
+    extra.forEach(c => {
+      if (!state.chats.find(x => x.id === c.id)) {
+        // Restore replies array if missing (messages with base64 src won't re-download)
+        if (!c.replies) c.replies = ['โอเคครับ','รับทราบ','ขอบคุณ','ได้เลย 👍'];
+        state.chats.unshift(c);
+      }
+    });
+  } catch (e) { /* ignore */ }
+}
+
+function savePersistedChats() {
+  // Only persist admin-created / imported / room chats — not default demo chats
+  // Messages with base64 src (images) are large; trim them to text only for storage
+  const extra = state.chats
+    .filter(c => !DEFAULT_IDS.has(c.id))
+    .map(c => ({
+      ...c,
+      messages: c.messages.map(m =>
+        m.type === 'image'
+          ? { ...m, src: '[รูปภาพ]', type: 'text', text: '📷 รูปภาพ' }
+          : m
+      )
+    }));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(extra)); } catch (e) {}
+}
+
+function setupBroadcastChannel() {
+  if (typeof BroadcastChannel === 'undefined') return;
+  bc = new BroadcastChannel('peechat');
+  bc.onmessage = ({ data }) => {
+    const { type, chat, chatId } = data;
+    if (type === 'chat_added') {
+      if (!state.chats.find(c => c.id === chat.id)) {
+        if (!chat.replies) chat.replies = ['โอเคครับ','รับทราบ','ขอบคุณ'];
+        state.chats.unshift(chat);
+        renderChatList();
+        showToast('📢 กลุ่มใหม่: ' + chat.name);
+      }
+    } else if (type === 'chat_deleted') {
+      const idx = state.chats.findIndex(c => c.id === chatId);
+      if (idx !== -1) {
+        if (state.activeId === chatId) {
+          state.activeId = null;
+          chatView.hidden = true;
+          emptyState.hidden = false;
+          app.classList.remove('show-chat');
+        }
+        state.chats.splice(idx, 1);
+        renderChatList();
+      }
+    }
+  };
+}
+
+function bcast(msg) { try { bc && bc.postMessage(msg); } catch (e) {} }
+
+/* =========================================================
+   Confirm dialog
+   ========================================================= */
+let _confirmCb = null;
+
+function showConfirm(title, msg, onOk) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent   = msg;
+  document.getElementById('confirmModal').style.display = 'flex';
+  _confirmCb = onOk;
+}
+
+document.getElementById('confirmOk').addEventListener('click', () => {
+  document.getElementById('confirmModal').style.display = 'none';
+  if (_confirmCb) { _confirmCb(); _confirmCb = null; }
+});
+
+document.getElementById('confirmCancel').addEventListener('click', () => {
+  document.getElementById('confirmModal').style.display = 'none';
+  _confirmCb = null;
+});
+
 const formatBytes = b => {
   if (b < 1024)      return b + ' B';
   if (b < 1048576)   return (b / 1024).toFixed(1) + ' KB';
@@ -926,6 +1045,8 @@ function afterLogin() {
 
   if (state.isAdmin) adminActionsEl.style.display = 'flex';
 
+  loadPersistedChats();
+  setupBroadcastChannel();
   renderChatList();
   updateSendBtn();
 
@@ -1027,6 +1148,8 @@ function openRoomById(roomId) {
     replies: ['สวัสดีครับ 👋','ยินดีด้วยค่ะ','มีอะไรให้ช่วยไหม?','เข้าร่วมแล้ว ✅']
   };
   state.chats.unshift(newChat);
+  savePersistedChats();
+  bcast({ type: 'chat_added', chat: newChat });
   renderChatList();
   openChat(roomId);
 }
@@ -1089,6 +1212,8 @@ document.getElementById('createGroupSubmit').addEventListener('click', () => {
     replies: ['โอเคครับ','รับทราบ','ได้เลย 👍','เดี๋ยวตอบกลับนะ','ขอบคุณ']
   };
   state.chats.unshift(newChat);
+  savePersistedChats();
+  bcast({ type: 'chat_added', chat: newChat });
   document.getElementById('createGroupModal').style.display = 'none';
   renderChatList();
   openChat(id);
@@ -1247,6 +1372,8 @@ document.getElementById('importSubmit').addEventListener('click', () => {
   };
 
   state.chats.unshift(newChat);
+  savePersistedChats();
+  bcast({ type: 'chat_added', chat: newChat });
   document.getElementById('importModal').style.display = 'none';
   renderChatList();
   openChat(id);
@@ -1348,9 +1475,16 @@ function renderChatList() {
       <div class="chat-side">
         <div class="chat-time">${last ? esc(last.time) : ''}</div>
         ${chat.unread ? `<div class="badge">${chat.unread}</div>` : ''}
+        ${state.isAdmin ? `<button class="del-chat-btn" title="ลบกลุ่ม/ผู้ใช้">🗑️</button>` : ''}
       </div>
     `;
     li.addEventListener('click', () => openChat(chat.id));
+    if (state.isAdmin) {
+      li.querySelector('.del-chat-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        deleteChat(chat.id);
+      });
+    }
     chatListEl.appendChild(li);
   });
 }
@@ -1589,6 +1723,34 @@ document.addEventListener('click', e => {
     emojiBar.hidden = true;
   }
 });
+
+/* =========================================================
+   Delete chat / user
+   ========================================================= */
+function deleteChat(id) {
+  const chat = getChat(id);
+  if (!chat) return;
+  showConfirm(
+    `ลบ "${chat.name}"?`,
+    'กลุ่มและข้อความทั้งหมดจะถูกลบออก',
+    () => {
+      const idx = state.chats.findIndex(c => c.id === id);
+      if (idx === -1) return;
+      const name = state.chats[idx].name;
+      state.chats.splice(idx, 1);
+      if (state.activeId === id) {
+        state.activeId = null;
+        chatView.hidden = true;
+        emptyState.hidden = false;
+        app.classList.remove('show-chat');
+      }
+      savePersistedChats();
+      bcast({ type: 'chat_deleted', chatId: id });
+      renderChatList();
+      showToast('🗑️ ลบ "' + name + '" แล้ว');
+    }
+  );
+}
 
 /* =========================================================
    Init
