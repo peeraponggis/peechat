@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>LINE Chat — SPA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --green: #06C755;
+    --green-dark: #05A847;
+    --border: #E8E8E8;
+    --muted: #9AA0A6;
+    --chat-bg: #9DB9D8;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: "Segoe UI", "Noto Sans Thai", "Sarabun", system-ui, -apple-system, sans-serif;
+    background: #DFE6EC;
+    color: #111;
+    overflow: hidden;
+  }
+
+  /* ---------- Layout ---------- */
+  .app {
+    display: flex;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    box-shadow: 0 0 40px rgba(0,0,0,.12);
+    overflow: hidden;
+  }
+
+  /* ---------- Modals ---------- */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .modal-box {
+    background: #fff;
+    border-radius: 20px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.2);
+    animation: slideUp .22s ease-out;
+  }
+
+  .modal-box--wide { max-width: 480px; }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-icon { font-size: 48px; text-align: center; margin-bottom: 12px; }
+  .modal-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+  .modal-subtitle { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 20px; }
+
+  .form-group { margin-bottom: 14px; }
+
+  .form-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #555; }
+
+  .modal-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color .2s;
+  }
+
+  .modal-input:focus { border-color: var(--green); }
+
+  .error-msg { font-size: 13px; color: #e53935; text-align: center; margin-bottom: 10px; }
+
+  .btn-green {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 13px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s;
+  }
+
+  .btn-green:hover { background: var(--green-dark); }
+  .btn-green:disabled { opacity: .35; cursor: default; }
+  .btn-green.btn-block { width: 100%; margin-top: 4px; }
+
+  .btn-outline {
+    background: transparent;
+    color: #555;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s;
+  }
+
+  .btn-outline:hover { background: #F5F5F5; }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Color swatches */
+  .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .color-swatch {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: transform .15s, border-color .15s;
+  }
+
+  .color-swatch:hover { transform: scale(1.12); }
+  .color-swatch.selected { border-color: #333; }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    text-align: center;
+    background: #F8F9FA;
+    transition: border-color .2s, background .2s;
+    margin: 14px 0;
+  }
+
+  .drop-zone.drag-over { border-color: var(--green); background: #EAF9EF; }
+  .drop-zone-icon { font-size: 36px; margin-bottom: 8px; }
+  .drop-zone p { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+
+  .import-preview {
+    background: #F5F5F5;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .import-preview strong { color: var(--green); }
+
+  /* Image modal */
+  .img-modal { background: rgba(0,0,0,.88); cursor: zoom-out; }
+
+  .img-modal img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 4px 30px rgba(0,0,0,.5);
+  }
+
+  .img-modal-close {
+    position: fixed;
+    top: 14px; right: 14px;
+    background: rgba(255,255,255,.18);
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+
+  .img-modal-close:hover { background: rgba(255,255,255,.32); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.78);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 400;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 340px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: #fff;
+  }
+
+  .sidebar-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+
+  .sidebar-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-title-row h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; }
+
+  .admin-actions { display: flex; gap: 2px; }
+
+  .user-info-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    min-height: 24px;
+  }
+
+  .user-badge { font-size: 13px; font-weight: 600; color: #555; }
+
+  .logout-btn {
+    font-size: 12px;
+    color: #e53935;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: inherit;
+    transition: background .15s;
+  }
+
+  .logout-btn:hover { background: #FEE; }
+
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #F2F3F5;
+    border-radius: 20px;
+    padding: 8px 14px;
+  }
+
+  .search-wrap span { font-size: 14px; opacity: .5; }
+
+  .search-wrap input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  .chat-list { list-style: none; flex: 1; overflow-y: auto; }
+
+  .chat-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background .15s;
+    border-bottom: 1px solid #F5F5F5;
+  }
+
+  .chat-item:hover { background: #F7F8FA; }
+  .chat-item.active { background: #EAF9EF; }
+
+  .avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 19px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .avatar.sm { width: 38px; height: 38px; font-size: 15px; }
+
+  .chat-meta { flex: 1; min-width: 0; }
+
+  .chat-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-preview {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+
+  .chat-time { font-size: 11px; color: var(--muted); }
+
+  .badge {
+    background: var(--green);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+  }
+
+  /* ---------- Chat panel ---------- */
+  .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--chat-bg);
+    position: relative;
+  }
+
+  .empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #5b7591;
+    background: #F5F7FA;
+  }
+
+  .empty-icon { font-size: 48px; opacity: .5; }
+  .empty p { font-size: 15px; }
+
+  .chat-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+  .chat-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 2;
+  }
+
+  .head-info { flex: 1; min-width: 0; }
+  .head-name { font-size: 15px; font-weight: 600; }
+  .head-status { font-size: 12px; color: var(--green); }
+
+  .icon-btn {
+    border: none;
+    background: transparent;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    transition: background .15s;
+    line-height: 1;
+  }
+
+  .icon-btn:hover { background: #F0F0F0; }
+
+  .back { display: none; font-size: 22px; }
+
+  /* ---------- Messages ---------- */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 0 10px;
+    scroll-behavior: smooth;
+    background-image: radial-gradient(rgba(255,255,255,.12) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  .date-sep { text-align: center; margin: 10px 0 6px; }
+
+  .date-sep span {
+    background: rgba(0,0,0,.18);
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 12px;
+    border-radius: 10px;
+    text-shadow: 0 1px 1px rgba(0,0,0,.2);
+  }
+
+  .msg {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 0 16px;
+    margin-bottom: 8px;
+    animation: pop .18s ease-out;
+  }
+
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.me { flex-direction: row-reverse; }
+
+  .msg-inner { display: flex; flex-direction: column; max-width: 68%; }
+  .msg.me .msg-inner { align-items: flex-end; }
+
+  .msg-sender {
+    font-size: 11px;
+    color: rgba(255,255,255,.85);
+    text-shadow: 0 1px 2px rgba(0,0,0,.3);
+    margin-bottom: 2px;
+    padding: 0 4px;
+  }
+
+  .bubble {
+    padding: 9px 14px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.45;
+    word-break: break-word;
+    white-space: pre-wrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,.10);
+  }
+
+  .msg.them .bubble { background: #fff; color: #111; border-bottom-left-radius: 5px; }
+  .msg.me .bubble   { background: var(--green); color: #fff; border-bottom-right-radius: 5px; }
+
+  .msg-time {
+    font-size: 10px;
+    color: rgba(255,255,255,.85);
+    text-shadow: 0 1px 1px rgba(0,0,0,.25);
+    white-space: nowrap;
+    padding-bottom: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Image bubble */
+  .bubble--img {
+    padding: 4px;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .chat-img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 14px;
+    display: block;
+    cursor: zoom-in;
+    object-fit: cover;
+  }
+
+  .msg.them .bubble--img .chat-img { border-bottom-left-radius: 5px; }
+  .msg.me .bubble--img .chat-img   { border-bottom-right-radius: 5px; }
+
+  /* File card */
+  .file-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    min-width: 180px;
+    max-width: 240px;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,.10);
+    transition: opacity .15s;
+  }
+
+  .file-card:hover { opacity: .85; }
+
+  .msg.them .file-card { background: #fff; border-bottom-left-radius: 5px; }
+  .msg.me .file-card   { background: var(--green); border-bottom-right-radius: 5px; }
+
+  .file-icon { font-size: 26px; flex-shrink: 0; }
+
+  .file-info { flex: 1; min-width: 0; }
+
+  .file-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .msg.them .file-name { color: #111; }
+  .msg.me .file-name   { color: #fff; }
+
+  .file-size { font-size: 11px; margin-top: 2px; }
+
+  .msg.them .file-size { color: var(--muted); }
+  .msg.me .file-size   { color: rgba(255,255,255,.75); }
+
+  /* Typing indicator */
+  .typing .bubble {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    padding: 13px 16px;
+  }
+
+  .typing .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #B5B5B5;
+    animation: blink 1.2s infinite;
+  }
+
+  .typing .dot:nth-child(2) { animation-delay: .2s; }
+  .typing .dot:nth-child(3) { animation-delay: .4s; }
+
+  @keyframes blink {
+    0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+    30%           { opacity: 1;  transform: translateY(-3px); }
+  }
+
+  /* ---------- Emoji bar ---------- */
+  .emoji-bar {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .emoji-bar button {
+    border: none;
+    background: transparent;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 8px;
+    transition: background .15s, transform .1s;
+  }
+
+  .emoji-bar button:hover { background: #F0F0F0; transform: scale(1.15); }
+
+  /* ---------- Composer ---------- */
+  .composer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .composer input[type="text"] {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 15px;
+    font-family: inherit;
+    padding: 11px 16px;
+    background: #F2F3F5;
+    border-radius: 22px;
+    min-width: 0;
+  }
+
+  .send-btn {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: var(--green);
+    color: #fff;
+    font-size: 17px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background .15s, transform .1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .send-btn:hover { background: var(--green-dark); }
+  .send-btn:active { transform: scale(.92); }
+  .send-btn:disabled { opacity: .35; cursor: default; }
+
+  /* ---------- Scrollbar ---------- */
+  .messages::-webkit-scrollbar,
+  .chat-list::-webkit-scrollbar { width: 6px; }
+
+  .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.45); border-radius: 3px; }
+  .chat-list::-webkit-scrollbar-thumb { background: #D5D5D5; border-radius: 3px; }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 768px) {
+    .app { max-width: none; box-shadow: none; }
+    .sidebar { width: 100%; border-right: none; }
+
+    .chat-panel {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      transform: translateX(100%);
+      transition: transform .26s cubic-bezier(.4,0,.2,1);
+    }
+
+    .app.show-chat .chat-panel { transform: translateX(0); }
+    .back { display: block; }
+    .msg-inner { max-width: 76%; }
+    .toast { bottom: 80px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Login Modal ===== -->
+<div id="loginModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-icon">💬</div>
+    <h2 class="modal-title">LINE Chat</h2>
+    <p class="modal-subtitle">กรุณาตั้งชื่อผู้ใช้งานเพื่อเข้าใช้</p>
+    <div class="form-group">
+      <input id="loginUsername" type="text" class="modal-input"
+        placeholder="ชื่อผู้ใช้งาน" maxlength="30" autocomplete="off">
+    </div>
+    <div id="adminPasswordRow" class="form-group" hidden>
+      <input id="loginPassword" type="password" class="modal-input"
+        placeholder="รหัสผ่าน Admin">
+    </div>
+    <div id="loginError" class="error-msg" hidden></div>
+    <button id="loginSubmit" class="btn-green btn-block">เข้าใช้งาน</button>
+    <p style="font-size:11px;color:#bbb;text-align:center;margin-top:14px;">
+      💡 พิมพ์ <strong>admin</strong> เพื่อเข้าสู่โหมดผู้ดูแลระบบ
+    </p>
+  </div>
+</div>
+
+<!-- ===== Create Group Modal ===== -->
+<div id="createGroupModal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <h2 class="modal-title">สร้างกลุ่มใหม่</h2>
+    <div class="form-group">
+      <label class="form-label">ชื่อกลุ่ม</label>
+      <input id="newGroupName" type="text" class="modal-input"
+        placeholder="ชื่อกลุ่ม..." maxlength="40" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">สีกลุ่ม</label>
+      <div class="color-picker" id="colorPicker"></div>
+    </div>
+    <div class="modal-actions">
+      <button id="createGroupCancel" class="btn-outline">ยกเลิก</button>
+      <button id="createGroupSubmit" class="btn-green">สร้าง</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Import LINE Backup Modal ===== -->
+<div id="importModal" class="modal-overlay" style="display:none">
+  <div class="modal-box modal-box--wide">
+    <h2 class="modal-title">นำเข้า LINE Backup</h2>
+    <p class="modal-subtitle">รองรับไฟล์ .txt ที่ Export จากแอป LINE</p>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-zone-icon">📁</div>
+      <p>ลากไฟล์ .txt มาวางที่นี่ หรือ</p>
+      <button class="btn-outline" id="browseImportFile" type="button">เลือกไฟล์</button>
+      <input id="importFileInput" type="file" accept=".txt,text/plain" hidden>
+    </div>
+    <div id="importPreview" class="import-preview" hidden></div>
+    <div class="modal-actions">
+      <button id="importCancel" class="btn-outline">ยกเลิก</button>
+      <button id="importSubmit" class="btn-green" disabled>นำเข้า</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Image Preview Modal ===== -->
+<div id="imgModal" class="modal-overlay img-modal" style="display:none">
+  <img id="imgModalSrc" src="" alt="preview">
+  <button id="imgModalClose" class="img-modal-close">✕</button>
+</div>
+
+<!-- ===== Toast ===== -->
+<div id="toast" class="toast" style="display:none"></div>
+
+<!-- ===== Main App ===== -->
+<div class="app" id="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-title-row">
+        <h1>แชท</h1>
+        <div class="admin-actions" id="adminActions" style="display:none">
+          <button class="icon-btn" id="addGroupBtn" title="สร้างกลุ่มใหม่">➕</button>
+          <button class="icon-btn" id="importLineBtn" title="นำเข้า LINE Backup">📥</button>
+        </div>
+      </div>
+      <div class="user-info-bar" id="userInfoBar"></div>
+      <div class="search-wrap">
+        <span>🔍</span>
+        <input id="search" type="text" placeholder="ค้นหาเพื่อนหรือข้อความ">
+      </div>
+    </div>
+    <ul class="chat-list" id="chatList"></ul>
+  </aside>
+
+  <!-- Chat panel -->
+  <section class="chat-panel">
+    <div class="empty" id="emptyState">
+      <div class="empty-icon">💬</div>
+      <p>เลือกการสนทนาเพื่อเริ่มแชท</p>
+    </div>
+
+    <div class="chat-view" id="chatView" hidden>
+      <header class="chat-head">
+        <button class="icon-btn back" id="backBtn" title="ย้อนกลับ">←</button>
+        <div class="avatar sm" id="headAvatar"></div>
+        <div class="head-info">
+          <div class="head-name" id="headName"></div>
+          <div class="head-status">ออนไลน์</div>
+        </div>
+        <button class="icon-btn" id="shareLinkBtn" title="คัดลอกลิงก์ห้องแชท">🔗</button>
+        <button class="icon-btn" title="โทร">📞</button>
+      </header>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="emoji-bar" id="emojiBar" hidden></div>
+
+      <footer class="composer">
+        <button class="icon-btn" id="emojiBtn" title="อิโมจิ">😊</button>
+        <button class="icon-btn" id="attachBtn" title="แนบไฟล์/รูป">📎</button>
+        <input id="fileInput" type="file" hidden
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.7z,.mp4,.mp3">
+        <input id="msgInput" type="text" placeholder="พิมพ์ข้อความ..." autocomplete="off">
+        <button class="send-btn" id="sendBtn" title="ส่ง">➤</button>
+      </footer>
+    </div>
+  </section>
+</div>
+
+<script>
+/* =========================================================
+   Constants
+   ========================================================= */
+const ADMIN_USER  = 'admin';
+const ADMIN_PASS  = '1234';
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+const GROUP_COLORS = [
+  '#FF7A59','#4A90E2','#E94F8A','#7B61FF','#F5A623',
+  '#27AE60','#E74C3C','#2980B9','#8E44AD','#16A085',
+  '#D35400','#1ABC9C'
+];
+
+/* =========================================================
+   State
+   ========================================================= */
+const state = {
+  username: null,
+  isAdmin: false,
+  activeId: null,
+  selectedColor: GROUP_COLORS[0],
+  importParsed: null,
+  nextId: 10,
+  chats: [
+    {
+      id: 'c1', name: 'ณัฐพล', avatar: 'ณ', color: '#FF7A59',
+      unread: 0, typing: false,
+      messages: [
+        { from:'them', type:'text', text:'สวัสดีครับ 👋', time:'09:12' },
+        { from:'them', type:'text', text:'วันนี้ว่างไหมครับ?', time:'09:12' },
+        { from:'me',   type:'text', text:'ว่างครับ มีอะไรเหรอ', time:'09:15' },
+        { from:'them', type:'text', text:'ไปกินข้าวเที่ยงด้วยกันไหม 🍜', time:'09:16' }
+      ],
+      replies: ['โอเคเลยครับ 👍','ได้เลย!','จัดไป 😎','รอแป๊บนะครับ','นัดที่ไหนดี?','อีก 10 นาทีนะ']
+    },
+    {
+      id: 'c2', name: 'กลุ่มทีมออกแบบ', avatar: 'ท', color: '#4A90E2',
+      unread: 2, typing: false,
+      messages: [
+        { from:'them', type:'text', text:'ส่งงานรอบแรกกันหรือยัง?', time:'08:40' },
+        { from:'them', type:'text', text:'เดี๋ยวฉันรวบรวมให้', time:'08:41' }
+      ],
+      replies: ['รับทราบครับ','เดี๋ยวส่งให้นะ','โอเค 👌','ขอเช็คก่อนนะ','เดี๋ยวประชุมกัน']
+    },
+    {
+      id: 'c3', name: 'มะลิ', avatar: 'ม', color: '#E94F8A',
+      unread: 0, typing: false,
+      messages: [
+        { from:'me',   type:'text', text:'รูปเมื่อวานสวยมากเลย', time:'21:03' },
+        { from:'them', type:'text', text:'ขอบคุณค่ะ 🥰', time:'21:05' }
+      ],
+      replies: ['ค่ะ 😊','อิอิ','ไว้ไปด้วยกันนะ','ส่งรูปเพิ่มให้นะ','จริงดิ!']
+    },
+    {
+      id: 'c4', name: 'พี่สมชาย (ที่ทำงาน)', avatar: 'ส', color: '#7B61FF',
+      unread: 0, typing: false,
+      messages: [
+        { from:'them', type:'text', text:'รายงานเดือนนี้ส่งวันศุกร์นะ', time:'13:20' },
+        { from:'me',   type:'text', text:'รับทราบครับ 🙏', time:'13:22' }
+      ],
+      replies: ['ครับ','รับทราบ','ได้ครับพี่','จะรีบทำครับ','ขอบคุณครับ']
+    },
+    {
+      id: 'c5', name: 'ครอบครัว ❤️', avatar: 'ค', color: '#F5A623',
+      unread: 0, typing: false,
+      messages: [
+        { from:'them', type:'text', text:'กลับบ้านกี่โมงลูก', time:'17:45' },
+        { from:'me',   type:'text', text:'ประมาณ 2 ทุ่มครับ', time:'17:50' }
+      ],
+      replies: ['โอเคลูก','ขับรถดีๆ นะ','แม่ทำกับข้าวไว้','ถึงแล้วบอกด้วย']
+    }
+  ]
+};
+
+/* =========================================================
+   Utility
+   ========================================================= */
+const nowTime = () => {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+};
+
+const esc = s => String(s).replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+const formatBytes = b => {
+  if (b < 1024)      return b + ' B';
+  if (b < 1048576)   return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(2) + ' MB';
+};
+
+const fileIcon = name => {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const map = { pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊',
+                ppt:'📋', pptx:'📋', txt:'📃', zip:'🗜️', rar:'🗜️',
+                '7z':'🗜️', mp4:'🎬', mp3:'🎵', wav:'🎵' };
+  return map[ext] || '📎';
+};
+
+/* =========================================================
+   Toast
+   ========================================================= */
+const toastEl = document.getElementById('toast');
+let toastTimer = null;
+
+function showToast(msg, ms = 2800) {
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, ms);
+}
+
+/* =========================================================
+   DOM refs
+   ========================================================= */
+const app          = document.getElementById('app');
+const chatListEl   = document.getElementById('chatList');
+const searchEl     = document.getElementById('search');
+const emptyState   = document.getElementById('emptyState');
+const chatView     = document.getElementById('chatView');
+const messagesEl   = document.getElementById('messages');
+const inputEl      = document.getElementById('msgInput');
+const sendBtn      = document.getElementById('sendBtn');
+const backBtn      = document.getElementById('backBtn');
+const headAvatar   = document.getElementById('headAvatar');
+const headName     = document.getElementById('headName');
+const emojiBtn     = document.getElementById('emojiBtn');
+const emojiBar     = document.getElementById('emojiBar');
+const fileInputEl  = document.getElementById('fileInput');
+const attachBtn    = document.getElementById('attachBtn');
+const shareLinkBtn = document.getElementById('shareLinkBtn');
+const adminActionsEl = document.getElementById('adminActions');
+const userInfoBar  = document.getElementById('userInfoBar');
+
+/* =========================================================
+   Auth
+   ========================================================= */
+function initAuth() {
+  const saved      = localStorage.getItem('line_username');
+  const savedAdmin = localStorage.getItem('line_isAdmin') === '1';
+
+  if (saved) {
+    state.username = saved;
+    state.isAdmin  = savedAdmin;
+    afterLogin();
+  } else {
+    document.getElementById('loginModal').style.display = 'flex';
+    document.getElementById('loginUsername').focus();
+  }
+}
+
+function afterLogin() {
+  document.getElementById('loginModal').style.display = 'none';
+
+  userInfoBar.innerHTML = `
+    <span class="user-badge">${state.isAdmin ? '👑 ' : '👤 '}${esc(state.username)}</span>
+    <button class="logout-btn" id="logoutBtn">ออกจากระบบ</button>
+  `;
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+
+  if (state.isAdmin) adminActionsEl.style.display = 'flex';
+
+  renderChatList();
+  updateSendBtn();
+
+  // Handle ?room= URL param
+  const params = new URLSearchParams(location.search);
+  const room = params.get('room');
+  if (room) {
+    openRoomById(decodeURIComponent(room));
+  } else if (window.innerWidth > 768) {
+    openChat(state.chats[0].id);
+  }
+}
+
+function logout() {
+  localStorage.removeItem('line_username');
+  localStorage.removeItem('line_isAdmin');
+  state.username = null;
+  state.isAdmin  = false;
+  state.activeId = null;
+  adminActionsEl.style.display = 'none';
+  chatView.hidden = true;
+  emptyState.hidden = false;
+  app.classList.remove('show-chat');
+  userInfoBar.innerHTML = '';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('adminPasswordRow').hidden = true;
+  document.getElementById('loginError').hidden = true;
+  document.getElementById('loginModal').style.display = 'flex';
+  document.getElementById('loginUsername').focus();
+}
+
+/* Login username watch → show password field for admin */
+document.getElementById('loginUsername').addEventListener('input', function() {
+  const isAdm = this.value.trim().toLowerCase() === ADMIN_USER;
+  document.getElementById('adminPasswordRow').hidden = !isAdm;
+  document.getElementById('loginError').hidden = true;
+});
+
+document.getElementById('loginSubmit').addEventListener('click', handleLogin);
+['loginUsername','loginPassword'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
+});
+
+function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl    = document.getElementById('loginError');
+
+  if (!username) {
+    errEl.textContent = 'กรุณาใส่ชื่อผู้ใช้งาน';
+    errEl.hidden = false;
+    return;
+  }
+
+  if (username.toLowerCase() === ADMIN_USER) {
+    if (password !== ADMIN_PASS) {
+      errEl.textContent = 'รหัสผ่านไม่ถูกต้อง';
+      errEl.hidden = false;
+      return;
+    }
+    state.isAdmin  = true;
+    state.username = ADMIN_USER;
+  } else {
+    state.username = username;
+    state.isAdmin  = false;
+  }
+
+  localStorage.setItem('line_username', state.username);
+  localStorage.setItem('line_isAdmin', state.isAdmin ? '1' : '0');
+  errEl.hidden = true;
+  afterLogin();
+}
+
+/* =========================================================
+   URL room joining
+   ========================================================= */
+function openRoomById(roomId) {
+  const existing = state.chats.find(
+    c => c.id === roomId || c.name.toLowerCase() === roomId.toLowerCase()
+  );
+  if (existing) {
+    openChat(existing.id);
+    return;
+  }
+  // Create a new room on-the-fly
+  const newChat = {
+    id: roomId,
+    name: 'ห้อง: ' + roomId,
+    avatar: roomId.charAt(0).toUpperCase() || 'R',
+    color: pick(GROUP_COLORS),
+    unread: 0, typing: false,
+    messages: [
+      { from:'them', type:'text',
+        text: 'ยินดีต้อนรับสู่ห้อง "' + roomId + '" 👋', time: nowTime() }
+    ],
+    replies: ['สวัสดีครับ 👋','ยินดีด้วยค่ะ','มีอะไรให้ช่วยไหม?','เข้าร่วมแล้ว ✅']
+  };
+  state.chats.unshift(newChat);
+  renderChatList();
+  openChat(roomId);
+}
+
+/* =========================================================
+   Share link
+   ========================================================= */
+shareLinkBtn.addEventListener('click', () => {
+  if (!state.activeId) return;
+  const url = new URL(location.href);
+  url.search = '?room=' + encodeURIComponent(state.activeId);
+  navigator.clipboard.writeText(url.toString())
+    .then(() => showToast('✅ คัดลอกลิงก์แล้ว!'))
+    .catch(() => showToast('🔗 ' + url.toString(), 4000));
+});
+
+/* =========================================================
+   Admin: Create Group
+   ========================================================= */
+const colorPickerEl = document.getElementById('colorPicker');
+GROUP_COLORS.forEach((c, i) => {
+  const sw = document.createElement('div');
+  sw.className = 'color-swatch' + (i === 0 ? ' selected' : '');
+  sw.style.background = c;
+  sw.addEventListener('click', () => {
+    colorPickerEl.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    sw.classList.add('selected');
+    state.selectedColor = c;
+  });
+  colorPickerEl.appendChild(sw);
+});
+
+document.getElementById('addGroupBtn').addEventListener('click', () => {
+  document.getElementById('newGroupName').value = '';
+  document.getElementById('createGroupModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('newGroupName').focus(), 80);
+});
+
+document.getElementById('createGroupCancel').addEventListener('click', () => {
+  document.getElementById('createGroupModal').style.display = 'none';
+});
+
+document.getElementById('newGroupName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('createGroupSubmit').click();
+  if (e.key === 'Escape') document.getElementById('createGroupCancel').click();
+});
+
+document.getElementById('createGroupSubmit').addEventListener('click', () => {
+  const name = document.getElementById('newGroupName').value.trim();
+  if (!name) { showToast('กรุณาใส่ชื่อกลุ่ม'); return; }
+
+  const id = 'g' + (++state.nextId);
+  const firstChar = [...name].find(c => /\p{L}/u.test(c)) || name[0];
+  const newChat = {
+    id, name,
+    avatar: firstChar.toUpperCase(),
+    color: state.selectedColor,
+    unread: 0, typing: false,
+    messages: [],
+    replies: ['โอเคครับ','รับทราบ','ได้เลย 👍','เดี๋ยวตอบกลับนะ','ขอบคุณ']
+  };
+  state.chats.unshift(newChat);
+  document.getElementById('createGroupModal').style.display = 'none';
+  renderChatList();
+  openChat(id);
+  showToast('✅ สร้างกลุ่ม "' + name + '" เรียบร้อย');
+});
+
+/* =========================================================
+   Admin: Import LINE Backup
+   ========================================================= */
+document.getElementById('importLineBtn').addEventListener('click', () => {
+  state.importParsed = null;
+  document.getElementById('importPreview').hidden = true;
+  document.getElementById('importSubmit').disabled = true;
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('importModal').style.display = 'flex';
+});
+
+document.getElementById('importCancel').addEventListener('click', () => {
+  document.getElementById('importModal').style.display = 'none';
+});
+
+document.getElementById('browseImportFile').addEventListener('click', () => {
+  document.getElementById('importFileInput').click();
+});
+
+document.getElementById('importFileInput').addEventListener('change', function() {
+  if (this.files[0]) readImportFile(this.files[0]);
+});
+
+/* Drag & drop on drop zone */
+const dropZoneEl = document.getElementById('dropZone');
+dropZoneEl.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZoneEl.classList.add('drag-over');
+});
+dropZoneEl.addEventListener('dragleave', () => dropZoneEl.classList.remove('drag-over'));
+dropZoneEl.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZoneEl.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) readImportFile(file);
+});
+
+function readImportFile(file) {
+  if (!file.name.toLowerCase().endsWith('.txt') && file.type !== 'text/plain') {
+    showToast('⚠️ รองรับเฉพาะไฟล์ .txt เท่านั้น');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseLINEBackup(e.target.result);
+    state.importParsed = parsed;
+
+    const previewEl = document.getElementById('importPreview');
+    previewEl.hidden = false;
+
+    const firstMsg = parsed.messages[0];
+    previewEl.innerHTML = `
+      <strong>ชื่อแชท:</strong> ${esc(parsed.chatName)}<br>
+      <strong>จำนวนข้อความ:</strong> ${parsed.messages.length} รายการ
+      ${firstMsg ? `<br><small style="color:#888">ข้อความแรก: ${esc(firstMsg.time)} · ${esc((firstMsg.text || '').slice(0,50))}…</small>` : ''}
+    `;
+    document.getElementById('importSubmit').disabled = parsed.messages.length === 0;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+/* LINE .txt backup parser */
+function parseLINEBackup(rawText) {
+  const lines    = rawText.split(/\r?\n/);
+  const messages = [];
+  let chatName   = 'LINE Chat';
+  let currentDate = '';
+  let pendingMsg  = null;
+
+  // Extract chat name from header line
+  const headerLine = (lines[0] || '').trim();
+  const namePatterns = [
+    /\[LINE\]\s+Chat history with\s+(.+)/i,
+    /\[LINE\]\s+ประวัติการสนทนากับ\s+(.+)/,
+    /\[LINE\]\s+.+\s+with\s+(.+)/i,
+    /Chat(?:\s+history)?\s+with\s+(.+)/i,
+  ];
+  for (const pat of namePatterns) {
+    const m = headerLine.match(pat);
+    if (m) { chatName = m[1].trim(); break; }
+  }
+
+  const flushPending = () => {
+    if (pendingMsg) { messages.push({ ...pendingMsg }); pendingMsg = null; }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    // Date separator: "2023/01/15(Sun)" or "------ 2023/01/15 ------"
+    const dateMatch =
+      line.match(/^-*\s*(\d{4}\/\d{2}\/\d{2})\s*[\(\-]/) ||
+      line.match(/^(\d{4}\/\d{2}\/\d{2})\s*$/);
+    if (dateMatch) {
+      flushPending();
+      const [y, mo, d] = dateMatch[1].split('/');
+      currentDate = `${d}/${mo}/${y}`;
+      continue;
+    }
+
+    // Message line: "HH:MM\tSender\tText"
+    const msgMatch = line.match(/^(\d{1,2}:\d{2})\t(.+?)\t([\s\S]+)$/);
+    if (msgMatch) {
+      flushPending();
+      const [, time, sender, text] = msgMatch;
+      const skips = [
+        '[Photo]','[Video]','[Sticker]','[File]','[Voice message]',
+        '[GIF]','[Contact]','[Location]','Missed call','Received a call'
+      ];
+      if (!skips.some(s => text.trim() === s || text.trim().startsWith(s))) {
+        pendingMsg = { time, sender, text: text.trim(), date: currentDate };
+      }
+      continue;
+    }
+
+    // Multi-line message continuation
+    if (pendingMsg && line !== '' && !line.startsWith('[LINE]')) {
+      pendingMsg.text += '\n' + line;
+    }
+  }
+  flushPending();
+
+  return { chatName, messages };
+}
+
+document.getElementById('importSubmit').addEventListener('click', () => {
+  if (!state.importParsed) return;
+  const { chatName, messages } = state.importParsed;
+
+  const id = 'import_' + Date.now();
+  const converted = messages.map(m => ({
+    from:   m.sender === state.username ? 'me' : 'them',
+    type:   'text',
+    text:   m.text,
+    time:   m.time,
+    date:   m.date,
+    sender: m.sender
+  }));
+
+  const firstChar = [...chatName].find(c => /\p{L}/u.test(c)) || 'L';
+  const newChat = {
+    id,
+    name: chatName,
+    avatar: firstChar.toUpperCase(),
+    color: '#2980B9',
+    unread: 0, typing: false,
+    messages: converted,
+    replies: ['โอเคครับ','รับทราบ','ขอบคุณ','ได้เลย 👍'],
+    isImported: true
+  };
+
+  state.chats.unshift(newChat);
+  document.getElementById('importModal').style.display = 'none';
+  renderChatList();
+  openChat(id);
+  showToast(`✅ นำเข้า "${chatName}" สำเร็จ (${messages.length} ข้อความ)`);
+});
+
+/* =========================================================
+   File / Image Upload
+   ========================================================= */
+attachBtn.addEventListener('click', () => fileInputEl.click());
+
+fileInputEl.addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  this.value = ''; // reset so same file can be selected again
+
+  if (file.size > MAX_FILE_BYTES) {
+    showToast(`⚠️ ไฟล์ใหญ่เกินกำหนด (${formatBytes(file.size)}) — สูงสุด 5 MB`);
+    return;
+  }
+
+  if (!state.activeId) return;
+  const chat = getChat(state.activeId);
+
+  if (file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      chat.messages.push({
+        from: 'me', type: 'image',
+        src: ev.target.result,
+        name: file.name,
+        size: file.size,
+        time: nowTime()
+      });
+      renderMessages();
+      renderChatList();
+      scheduleReply(chat);
+    };
+    reader.readAsDataURL(file);
+  } else {
+    const url = URL.createObjectURL(file);
+    chat.messages.push({
+      from: 'me', type: 'file',
+      name: file.name,
+      size: file.size,
+      url,
+      time: nowTime()
+    });
+    renderMessages();
+    renderChatList();
+    scheduleReply(chat);
+  }
+});
+
+/* =========================================================
+   Helpers
+   ========================================================= */
+const getChat = id => state.chats.find(c => c.id === id);
+
+const lastMsg = chat => chat.messages[chat.messages.length - 1] || null;
+
+const previewText = chat => {
+  const m = lastMsg(chat);
+  if (!m) return 'เริ่มการสนทนาใหม่';
+  const pfx = m.from === 'me' ? 'คุณ: ' : '';
+  if (m.type === 'image') return pfx + '📷 รูปภาพ';
+  if (m.type === 'file')  return pfx + '📎 ' + m.name;
+  return pfx + m.text;
+};
+
+/* =========================================================
+   Render: chat list
+   ========================================================= */
+function renderChatList() {
+  if (!state.username) return;
+  const q = searchEl.value.trim().toLowerCase();
+  chatListEl.innerHTML = '';
+
+  const list = state.chats.filter(c =>
+    !q || c.name.toLowerCase().includes(q) || previewText(c).toLowerCase().includes(q)
+  );
+
+  if (!list.length) {
+    chatListEl.innerHTML =
+      '<li style="padding:24px;text-align:center;color:#9AA0A6;font-size:14px;">ไม่พบผลการค้นหา</li>';
+    return;
+  }
+
+  list.forEach(chat => {
+    const last = lastMsg(chat);
+    const li = document.createElement('li');
+    li.className = 'chat-item' + (chat.id === state.activeId ? ' active' : '');
+    li.innerHTML = `
+      <div class="avatar" style="background:${esc(chat.color)}">${esc(chat.avatar)}</div>
+      <div class="chat-meta">
+        <div class="chat-name">${esc(chat.name)}</div>
+        <div class="chat-preview">${esc(previewText(chat))}</div>
+      </div>
+      <div class="chat-side">
+        <div class="chat-time">${last ? esc(last.time) : ''}</div>
+        ${chat.unread ? `<div class="badge">${chat.unread}</div>` : ''}
+      </div>
+    `;
+    li.addEventListener('click', () => openChat(chat.id));
+    chatListEl.appendChild(li);
+  });
+}
+
+/* =========================================================
+   Render: messages
+   ========================================================= */
+function renderMessages() {
+  const chat = getChat(state.activeId);
+  if (!chat) return;
+
+  messagesEl.innerHTML = '';
+  let lastDate = '';
+
+  chat.messages.forEach(m => {
+    // Date separator for imported chats
+    if (m.date && m.date !== lastDate) {
+      lastDate = m.date;
+      const sep = document.createElement('div');
+      sep.className = 'date-sep';
+      sep.innerHTML = `<span>${esc(m.date)}</span>`;
+      messagesEl.appendChild(sep);
+    }
+
+    const showSender = m.from === 'them' && m.sender && chat.isImported;
+    const row = document.createElement('div');
+    row.className = 'msg ' + (m.from === 'me' ? 'me' : 'them');
+
+    if (m.type === 'image') {
+      const imgSrc = esc(m.src);
+      row.innerHTML = `
+        <div class="msg-inner">
+          ${showSender ? `<div class="msg-sender">${esc(m.sender)}</div>` : ''}
+          <div class="bubble bubble--img">
+            <img class="chat-img" src="${imgSrc}" alt="${esc(m.name)}" loading="lazy">
+          </div>
+        </div>
+        <span class="msg-time">${esc(m.time)}</span>
+      `;
+      row.querySelector('.chat-img').addEventListener('click', () => openImgPreview(m.src));
+
+    } else if (m.type === 'file') {
+      row.innerHTML = `
+        <div class="msg-inner">
+          ${showSender ? `<div class="msg-sender">${esc(m.sender)}</div>` : ''}
+          <a class="file-card" href="${esc(m.url || '#')}" download="${esc(m.name)}" target="_blank">
+            <div class="file-icon">${fileIcon(m.name)}</div>
+            <div class="file-info">
+              <div class="file-name">${esc(m.name)}</div>
+              <div class="file-size">${formatBytes(m.size)}</div>
+            </div>
+          </a>
+        </div>
+        <span class="msg-time">${esc(m.time)}</span>
+      `;
+
+    } else {
+      row.innerHTML = `
+        <div class="msg-inner">
+          ${showSender ? `<div class="msg-sender">${esc(m.sender)}</div>` : ''}
+          <div class="bubble">${esc(m.text)}</div>
+        </div>
+        <span class="msg-time">${esc(m.time)}</span>
+      `;
+    }
+
+    messagesEl.appendChild(row);
+  });
+
+  // Typing indicator
+  if (chat.typing) {
+    const row = document.createElement('div');
+    row.className = 'msg them typing';
+    row.innerHTML = `
+      <div class="msg-inner">
+        <div class="bubble">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+    `;
+    messagesEl.appendChild(row);
+  }
+
+  scrollBottom();
+}
+
+const scrollBottom = () =>
+  requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; });
+
+/* =========================================================
+   Image preview
+   ========================================================= */
+function openImgPreview(src) {
+  document.getElementById('imgModalSrc').src = src;
+  document.getElementById('imgModal').style.display = 'flex';
+}
+
+document.getElementById('imgModalClose').addEventListener('click', closeImgPreview);
+document.getElementById('imgModal').addEventListener('click', function(e) {
+  if (e.target === this) closeImgPreview();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeImgPreview();
+    document.getElementById('createGroupModal').style.display = 'none';
+    document.getElementById('importModal').style.display = 'none';
+  }
+});
+
+function closeImgPreview() {
+  document.getElementById('imgModal').style.display = 'none';
+  document.getElementById('imgModalSrc').src = '';
+}
+
+/* =========================================================
+   Open chat
+   ========================================================= */
+function openChat(id) {
+  const chat = getChat(id);
+  if (!chat) return;
+
+  state.activeId = id;
+  chat.unread = 0;
+
+  headAvatar.textContent = chat.avatar;
+  headAvatar.style.background = chat.color;
+  headName.textContent = chat.name;
+
+  emptyState.hidden = true;
+  chatView.hidden = false;
+  app.classList.add('show-chat');
+
+  renderMessages();
+  renderChatList();
+  inputEl.value = '';
+  inputEl.focus();
+  updateSendBtn();
+}
+
+/* =========================================================
+   Send message
+   ========================================================= */
+function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || !state.activeId) return;
+
+  const chat = getChat(state.activeId);
+  chat.messages.push({ from: 'me', type: 'text', text, time: nowTime() });
+  inputEl.value = '';
+
+  renderMessages();
+  renderChatList();
+  updateSendBtn();
+  scheduleReply(chat);
+}
+
+/* =========================================================
+   Auto-reply
+   ========================================================= */
+function scheduleReply(chat) {
+  if (chat.typing || !chat.replies || !chat.replies.length) return;
+
+  const thinkDelay = 500 + Math.random() * 700;
+  const typeDelay  = 700 + Math.random() * 1100;
+
+  setTimeout(() => {
+    chat.typing = true;
+    if (state.activeId === chat.id) renderMessages();
+
+    setTimeout(() => {
+      chat.typing = false;
+      chat.messages.push({ from: 'them', type: 'text', text: pick(chat.replies), time: nowTime() });
+
+      if (state.activeId === chat.id) {
+        renderMessages();
+      } else {
+        chat.unread++;
+      }
+      renderChatList();
+    }, typeDelay);
+  }, thinkDelay);
+}
+
+/* =========================================================
+   Send button state
+   ========================================================= */
+function updateSendBtn() {
+  sendBtn.disabled = inputEl.value.trim().length === 0;
+}
+
+/* =========================================================
+   Emoji picker
+   ========================================================= */
+const EMOJIS = [
+  '😀','😂','🥰','😎','🤔','😭','😡','👍','🙏','👏','🎉','❤️',
+  '🔥','✨','🍜','☕','🌸','🐱','🐶','💪','😴','🤣','😊','🥺'
+];
+
+EMOJIS.forEach(e => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = e;
+  b.addEventListener('click', () => {
+    inputEl.value += e;
+    inputEl.focus();
+    updateSendBtn();
+  });
+  emojiBar.appendChild(b);
+});
+
+emojiBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  emojiBar.hidden = !emojiBar.hidden;
+});
+
+/* =========================================================
+   Events
+   ========================================================= */
+sendBtn.addEventListener('click', sendMessage);
+inputEl.addEventListener('input', updateSendBtn);
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+backBtn.addEventListener('click', () => {
+  app.classList.remove('show-chat');
+  state.activeId = null;
+  renderChatList();
+});
+
+searchEl.addEventListener('input', renderChatList);
+
+// Close emoji bar on outside click
+document.addEventListener('click', e => {
+  if (!emojiBar.hidden && !emojiBtn.contains(e.target) && !emojiBar.contains(e.target)) {
+    emojiBar.hidden = true;
+  }
+});
+
+/* =========================================================
+   Init
+   ========================================================= */
+initAuth();
+</script>
+</body>
+</html>
